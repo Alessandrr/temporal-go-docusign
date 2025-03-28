@@ -6,16 +6,22 @@ import (
 	"time"
 
 	"github.com/alessandrr/temporal-go-docusign/docusign"
+	"github.com/joho/godotenv"
 	"go.temporal.io/sdk/client"
 	"go.temporal.io/sdk/worker"
 )
 
 func main() {
-	cache := docusign.NewDocusignKeysCache(1 * time.Minute)
+	err := godotenv.Load("../.env")
+	if err != nil {
+		log.Fatal("Error loading .env file")
+	}
 
-	apiClient := docusign.NewDocusignAPIClient(http.Header{}, &http.Client{})
-	authService := docusign.NewDocusignAuthService(cache, apiClient)
-	activities := docusign.NewDocusignActivities(apiClient, authService)
+	cache := docusign.NewKeysCache(1 * time.Minute)
+
+	apiClient := docusign.NewAPIClient(http.Header{}, &http.Client{})
+	authService := docusign.NewAuthService(cache, apiClient, docusign.LoadConfig())
+	activities := docusign.NewActivities(apiClient, authService)
 
 	c, err := client.Dial(client.Options{})
 	if err != nil {

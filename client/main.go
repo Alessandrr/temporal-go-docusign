@@ -5,6 +5,7 @@ import (
 	"log"
 
 	"github.com/alessandrr/temporal-go-docusign/docusign"
+	"github.com/google/uuid"
 	"go.temporal.io/sdk/client"
 )
 
@@ -17,6 +18,7 @@ func main() {
 
 	workflowOptions := client.StartWorkflowOptions{
 		TaskQueue: "nda",
+		ID:        "nda-workflow-" + uuid.NewString(),
 	}
 
 	we, err := c.ExecuteWorkflow(context.Background(), workflowOptions, docusign.SendNdaWorkflow)

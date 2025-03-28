@@ -11,25 +11,25 @@ import (
 const templateFieldsPath = "/restapi/v2.1/accounts/%s/envelopes/%s/docGenFormFields/"
 
 type DocGenService struct {
-	apiClient   *DocusignAPIClient
-	authUpdater DocusignAuthInfoUpdater
+	apiClient   *APIClient
+	authUpdater AuthInfoUpdater
 }
 
-type DocusignFormFieldsDTO struct {
-	Fields []DocusignFormFields `json:"docGenFormFields"`
+type FormFieldsDTO struct {
+	Fields []FormFields `json:"docGenFormFields"`
 }
 
-type DocusignFormFields struct {
-	DocumentID string              `json:"documentId"`
-	FieldList  []DocusignFormField `json:"docGenFormFieldList"`
+type FormFields struct {
+	DocumentID string      `json:"documentId"`
+	FieldList  []FormField `json:"docGenFormFieldList"`
 }
 
-type DocusignFormField struct {
+type FormField struct {
 	Name  string `json:"name"`
 	Value string `json:"value"`
 }
 
-func NewDocGenService(apiClient *DocusignAPIClient, authUpdater DocusignAuthInfoUpdater) *DocGenService {
+func NewDocGenService(apiClient *APIClient, authUpdater AuthInfoUpdater) *DocGenService {
 	return &DocGenService{
 		apiClient:   apiClient,
 		authUpdater: authUpdater,
@@ -37,7 +37,7 @@ func NewDocGenService(apiClient *DocusignAPIClient, authUpdater DocusignAuthInfo
 }
 
 type EnvelopeTemplateFieldGenerator interface {
-	GenerateTemplateFields() DocusignFormFieldsDTO
+	GenerateTemplateFields() FormFieldsDTO
 	SetDocumentID(documentID string)
 }
 
@@ -48,12 +48,12 @@ type NdaTemplateFields struct {
 	DocumentID  string
 }
 
-func (f *NdaTemplateFields) GenerateTemplateFields() DocusignFormFieldsDTO {
-	return DocusignFormFieldsDTO{
-		Fields: []DocusignFormFields{
+func (f *NdaTemplateFields) GenerateTemplateFields() FormFieldsDTO {
+	return FormFieldsDTO{
+		Fields: []FormFields{
 			{
 				DocumentID: f.DocumentID,
-				FieldList: []DocusignFormField{
+				FieldList: []FormField{
 					{
 						Name:  "vendorName",
 						Value: f.VendorName,
@@ -153,10 +153,10 @@ func (s *DocGenService) FillTemplateFields(envelopeSummary EnvelopeSummary, gene
 	return nil
 }
 
-func (s *DocGenService) getTemplateFields(envelopeSummary EnvelopeSummary, user DocusignUser) (DocusignFormFieldsDTO, error) {
+func (s *DocGenService) getTemplateFields(envelopeSummary EnvelopeSummary, user DocusignUser) (FormFieldsDTO, error) {
 	authInfo, err := s.authUpdater.UpdateAuthInfo(user)
 	if err != nil {
-		return DocusignFormFieldsDTO{}, err
+		return FormFieldsDTO{}, err
 	}
 
 	req, err := http.NewRequest(
@@ -165,7 +165,7 @@ func (s *DocGenService) getTemplateFields(envelopeSummary EnvelopeSummary, user 
 		nil,
 	)
 	if err != nil {
-		return DocusignFormFieldsDTO{}, err
+		return FormFieldsDTO{}, err
 	}
 
 	req.Header = s.apiClient.AuthHeader.Clone()
@@ -173,19 +173,19 @@ func (s *DocGenService) getTemplateFields(envelopeSummary EnvelopeSummary, user 
 
 	resp, err := s.apiClient.Client.Do(req)
 	if err != nil {
-		return DocusignFormFieldsDTO{}, err
+		return FormFieldsDTO{}, err
 	}
 
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		return DocusignFormFieldsDTO{}, fmt.Errorf("%s: failed to get template fields: %s", resp.Status, resp.Body)
+		return FormFieldsDTO{}, fmt.Errorf("%s: failed to get template fields: %s", resp.Status, resp.Body)
 	}
 
-	var formFields DocusignFormFieldsDTO
+	var formFields FormFieldsDTO
 	err = json.NewDecoder(resp.Body).Decode(&formFields)
 	if err != nil {
-		return DocusignFormFieldsDTO{}, err
+		return FormFieldsDTO{}, err
 	}
 
 	return formFields, nil

@@ -12,10 +12,15 @@ func SendNdaWorkflow(ctx workflow.Context) (string, error) {
 	}
 	ctx = workflow.WithActivityOptions(ctx, ao)
 
-	var DocusignActivities *DocusignActivities
+	var docusignActivities *Activities
 
 	var envelopeSummary EnvelopeSummary
-	err := workflow.ExecuteActivity(ctx, DocusignActivities.CreateNdaEnvelope, DocusignTestUser).Get(ctx, &envelopeSummary)
+	err := workflow.ExecuteActivity(ctx, docusignActivities.CreateNdaEnvelope, DocusignTestUser).Get(ctx, &envelopeSummary)
+	if err != nil {
+		return "", err
+	}
+
+	err = workflow.ExecuteActivity(ctx, docusignActivities.SendDraftEnvelope, envelopeSummary, DocusignTestUser).Get(ctx, &envelopeSummary)
 	if err != nil {
 		return "", err
 	}

@@ -4,6 +4,8 @@ go 1.23.5
 
 require github.com/golang-jwt/jwt v3.2.2+incompatible
 
+require github.com/joho/godotenv v1.5.1 // indirect
+
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/facebookgo/clock v0.0.0-20150410010913-600d898af40a // indirect

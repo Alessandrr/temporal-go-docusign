@@ -12,15 +12,15 @@ type TokenCache[K comparable, V any] interface {
 	Stop()
 }
 
-type DocusignKeysCache struct {
+type KeysCache struct {
 	entries  map[DocusignUser]DocusignUserCacheEntry
 	interval time.Duration
 	mu       sync.RWMutex
 	done     chan struct{}
 }
 
-func NewDocusignKeysCache(interval time.Duration) *DocusignKeysCache {
-	cache := &DocusignKeysCache{
+func NewKeysCache(interval time.Duration) *KeysCache {
+	cache := &KeysCache{
 		entries:  make(map[DocusignUser]DocusignUserCacheEntry),
 		interval: interval,
 		mu:       sync.RWMutex{},
@@ -32,7 +32,7 @@ func NewDocusignKeysCache(interval time.Duration) *DocusignKeysCache {
 	return cache
 }
 
-func (c *DocusignKeysCache) Get(user DocusignUser) (DocusignUserCacheEntry, bool) {
+func (c *KeysCache) Get(user DocusignUser) (DocusignUserCacheEntry, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -40,14 +40,14 @@ func (c *DocusignKeysCache) Get(user DocusignUser) (DocusignUserCacheEntry, bool
 	return entry, ok
 }
 
-func (c *DocusignKeysCache) Set(user DocusignUser, entry DocusignUserCacheEntry) {
+func (c *KeysCache) Set(user DocusignUser, entry DocusignUserCacheEntry) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	c.entries[user] = entry
 }
 
-func (c *DocusignKeysCache) Start() {
+func (c *KeysCache) Start() {
 	ticker := time.NewTicker(c.interval)
 
 	go func() {
@@ -69,6 +69,6 @@ func (c *DocusignKeysCache) Start() {
 	}()
 }
 
-func (c *DocusignKeysCache) Stop() {
+func (c *KeysCache) Stop() {
 	close(c.done)
 }

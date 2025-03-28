@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 )
 
@@ -15,13 +14,13 @@ const (
 	US_NDA_TEMPLATE_ID ndaTemplateId = "ad54810f-f5b2-435a-9f9b-3741cbb3a3a3"
 )
 
-type DocusignActivities struct {
-	apiClient   *DocusignAPIClient
-	authUpdater DocusignAuthInfoUpdater
+type Activities struct {
+	apiClient   *APIClient
+	authUpdater AuthInfoUpdater
 }
 
-func NewDocusignActivities(apiClient *DocusignAPIClient, authUpdater DocusignAuthInfoUpdater) *DocusignActivities {
-	return &DocusignActivities{
+func NewActivities(apiClient *APIClient, authUpdater AuthInfoUpdater) *Activities {
+	return &Activities{
 		apiClient:   apiClient,
 		authUpdater: authUpdater,
 	}
@@ -29,7 +28,7 @@ func NewDocusignActivities(apiClient *DocusignAPIClient, authUpdater DocusignAut
 
 const envelopesPath = "/restapi/v2.1/accounts/%s/envelopes/"
 
-type DocusignEnvelopeStatus struct {
+type EnvelopeStatus struct {
 	Status string `json:"status"`
 }
 
@@ -76,54 +75,7 @@ type EnvelopeSummary struct {
 	EnvelopeID string `json:"envelopeId"`
 }
 
-func (s *DocusignActivities) SendEnvelope(ctx context.Context, user DocusignUser, envelopeDefinition EnvelopeDefinition) (EnvelopeSummary, error) {
-	authInfo, err := s.authUpdater.UpdateAuthInfo(user)
-	if err != nil {
-		return EnvelopeSummary{}, err
-	}
-
-	envelopeDefinitionJSON, err := json.Marshal(envelopeDefinition)
-	if err != nil {
-		return EnvelopeSummary{}, err
-	}
-
-	req, err := http.NewRequest(
-		"POST",
-		fmt.Sprintf(s.apiClient.BaseURL+envelopesPath, authInfo.AccountId),
-		bytes.NewBuffer(envelopeDefinitionJSON),
-	)
-	if err != nil {
-		return EnvelopeSummary{}, err
-	}
-
-	req.Header = s.apiClient.AuthHeader.Clone()
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := s.apiClient.Client.Do(req)
-	if err != nil {
-		return EnvelopeSummary{}, err
-	}
-
-	if resp.StatusCode != 201 {
-		bodyBytes, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return EnvelopeSummary{}, fmt.Errorf("failed to read error response: %v", err)
-		}
-		return EnvelopeSummary{}, fmt.Errorf("%s: failed to send envelope: %s", resp.Status, string(bodyBytes))
-	}
-
-	defer resp.Body.Close()
-
-	var envelopeSummary EnvelopeSummary
-	err = json.NewDecoder(resp.Body).Decode(&envelopeSummary)
-	if err != nil {
-		return EnvelopeSummary{}, err
-	}
-
-	return envelopeSummary, nil
-}
-
-func (s *DocusignActivities) CreateNdaEnvelope(ctx context.Context, user DocusignUser) (EnvelopeSummary, error) {
+func (s *Activities) CreateNdaEnvelope(ctx context.Context, user DocusignUser) (EnvelopeSummary, error) {
 	authInfo, err := s.authUpdater.UpdateAuthInfo(user)
 	if err != nil {
 		return EnvelopeSummary{}, err
@@ -174,13 +126,13 @@ func (s *DocusignActivities) CreateNdaEnvelope(ctx context.Context, user Docusig
 	return envelopeSummary, nil
 }
 
-func (s *DocusignActivities) SendDraftEnvelope(ctx context.Context, envelopeSummary EnvelopeSummary, user DocusignUser) (EnvelopeSummary, error) {
+func (s *Activities) SendDraftEnvelope(ctx context.Context, envelopeSummary EnvelopeSummary, user DocusignUser) (EnvelopeSummary, error) {
 	authInfo, err := s.authUpdater.UpdateAuthInfo(user)
 	if err != nil {
 		return EnvelopeSummary{}, err
 	}
 
-	updateBody := DocusignEnvelopeStatus{
+	updateBody := EnvelopeStatus{
 		Status: "sent",
 	}
 

@@ -3,9 +3,10 @@ package docusign
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
-	"os"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt"
@@ -45,36 +46,38 @@ type AccessToken struct {
 	Exp   int    `json:"expires_in"`
 }
 
-type DocusignAPIClient struct {
+type APIClient struct {
 	BaseURL    string
 	AuthHeader http.Header
 	Client     *http.Client
 }
 
-func NewDocusignAPIClient(header http.Header, client *http.Client) *DocusignAPIClient {
-	return &DocusignAPIClient{
+func NewAPIClient(header http.Header, client *http.Client) *APIClient {
+	return &APIClient{
 		AuthHeader: header,
 		Client:     client,
 	}
 }
 
-type DocusignAuthInfoUpdater interface {
+type AuthInfoUpdater interface {
 	UpdateAuthInfo(user DocusignUser) (DocusignUserCacheEntry, error)
 }
 
-type DocusignAuthService struct {
+type AuthService struct {
 	cache     TokenCache[DocusignUser, DocusignUserCacheEntry]
-	apiClient *DocusignAPIClient
+	apiClient *APIClient
+	config    *DocusignConfig
 }
 
-func NewDocusignAuthService(cache TokenCache[DocusignUser, DocusignUserCacheEntry], client *DocusignAPIClient) *DocusignAuthService {
-	return &DocusignAuthService{
+func NewAuthService(cache TokenCache[DocusignUser, DocusignUserCacheEntry], client *APIClient, config *DocusignConfig) *AuthService {
+	return &AuthService{
 		cache:     cache,
 		apiClient: client,
+		config:    config,
 	}
 }
 
-func (s *DocusignAuthService) UpdateAuthInfo(user DocusignUser) (DocusignUserCacheEntry, error) {
+func (s *AuthService) UpdateAuthInfo(user DocusignUser) (DocusignUserCacheEntry, error) {
 	currentAuthInfo, err := s.getAuthInfo(user)
 	if err != nil {
 		return DocusignUserCacheEntry{}, err
@@ -86,23 +89,23 @@ func (s *DocusignAuthService) UpdateAuthInfo(user DocusignUser) (DocusignUserCac
 	return currentAuthInfo, nil
 }
 
-func (s *DocusignAuthService) getAuthInfo(user DocusignUser) (DocusignUserCacheEntry, error) {
+func (s *AuthService) getAuthInfo(user DocusignUser) (DocusignUserCacheEntry, error) {
 	cacheEntry, ok := s.cache.Get(user)
 	if ok {
 		return cacheEntry, nil
 	}
 
-	token, err := makeDocusignToken(user)
+	token, err := s.makeDocusignToken(user)
 	if err != nil {
 		return DocusignUserCacheEntry{}, err
 	}
 
-	accessToken, err := getDocusignAccessToken(token)
+	accessToken, err := s.getDocusignAccessToken(token)
 	if err != nil {
 		return DocusignUserCacheEntry{}, err
 	}
 
-	req, err := http.NewRequest("GET", "https://account-d.docusign.com/oauth/userinfo", nil)
+	req, err := http.NewRequest("GET", s.config.BaseAuthURL+"/oauth/userinfo", nil)
 	req.Header.Add("Authorization", "Bearer "+accessToken.Token)
 	if err != nil {
 		fmt.Printf("Error creating request: %s", err)
@@ -117,12 +120,22 @@ func (s *DocusignAuthService) getAuthInfo(user DocusignUser) (DocusignUserCacheE
 
 	defer resp.Body.Close()
 
+	if resp.StatusCode != 200 {
+		body, _ := io.ReadAll(resp.Body)
+		fmt.Printf("Request failed with status code: %d, body: %s", resp.StatusCode, string(body))
+		return DocusignUserCacheEntry{}, fmt.Errorf("request failed with status code: %d, body: %s", resp.StatusCode, string(body))
+	}
+
 	var accountId DocusignUserInfo
 
 	err = json.NewDecoder(resp.Body).Decode(&accountId)
 	if err != nil {
 		fmt.Printf("Error decoding account ID: %s", err)
 		return DocusignUserCacheEntry{}, err
+	}
+
+	if len(accountId.Accounts) == 0 {
+		return DocusignUserCacheEntry{}, fmt.Errorf("no accounts found for user %s", user)
 	}
 
 	newEntry := DocusignUserCacheEntry{
@@ -138,8 +151,8 @@ func (s *DocusignAuthService) getAuthInfo(user DocusignUser) (DocusignUserCacheE
 	return newEntry, nil
 }
 
-func getDocusignAccessToken(jwtString string) (AccessToken, error) {
-	resp, err := http.PostForm("https://account-d.docusign.com/oauth/token", url.Values{
+func (s *AuthService) getDocusignAccessToken(jwtString string) (AccessToken, error) {
+	resp, err := http.PostForm(s.config.BaseAuthURL+"/oauth/token", url.Values{
 		"grant_type": {"urn:ietf:params:oauth:grant-type:jwt-bearer"},
 		"assertion":  {jwtString},
 	})
@@ -147,6 +160,12 @@ func getDocusignAccessToken(jwtString string) (AccessToken, error) {
 	if err != nil {
 		fmt.Printf("Error getting access token: %s", err)
 		return AccessToken{}, err
+	}
+
+	if resp.StatusCode != 200 {
+		body, _ := io.ReadAll(resp.Body)
+		fmt.Printf("Request failed with status code: %d, body: %s", resp.StatusCode, string(body))
+		return AccessToken{}, fmt.Errorf("request failed with status code: %d, body: %s", resp.StatusCode, string(body))
 	}
 
 	defer resp.Body.Close()
@@ -162,23 +181,18 @@ func getDocusignAccessToken(jwtString string) (AccessToken, error) {
 	return token, nil
 }
 
-func makeDocusignToken(user DocusignUser) (string, error) {
+func (s *AuthService) makeDocusignToken(user DocusignUser) (string, error) {
 	rawJWT := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
-		"iss":   "bab1a688-7783-4b90-92ac-d0c80dbbc9e5",
+		"iss":   s.config.ClientID,
 		"sub":   string(user),
 		"iat":   time.Now().Unix(),
 		"exp":   time.Now().Unix() + 3600,
-		"aud":   "account-d.docusign.com",
+		"aud":   strings.TrimPrefix(s.config.BaseAuthURL, "https://"),
 		"scope": "signature impersonation",
 	})
 
-	RSAPrivateKey, err := os.ReadFile("../private.pem")
-	if err != nil {
-		fmt.Printf("Error opening file: %s", err)
-		return "", err
-	}
-
-	rsaPrivate, err := jwt.ParseRSAPrivateKeyFromPEM(RSAPrivateKey)
+	pem := s.config.PrivateKey
+	rsaPrivate, err := jwt.ParseRSAPrivateKeyFromPEM(pem)
 
 	if err != nil {
 		fmt.Printf("key update error for: %s", err)
