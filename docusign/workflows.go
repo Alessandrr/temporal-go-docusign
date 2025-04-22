@@ -13,10 +13,10 @@ func SendNdaWorkflow(ctx workflow.Context) (string, error) {
 	}
 	ctx = workflow.WithActivityOptions(ctx, ao)
 
-	var docusignActivities *Activities
+	var activities *Activities
 
 	var envelopeSummary EnvelopeSummary
-	err := workflow.ExecuteActivity(ctx, docusignActivities.CreateNdaEnvelope, DocusignTestUser).Get(ctx, &envelopeSummary)
+	err := workflow.ExecuteActivity(ctx, activities.CreateNdaEnvelope, DocusignTestUser).Get(ctx, &envelopeSummary)
 	if err != nil {
 		return "", err
 	}
@@ -36,12 +36,12 @@ func SendNdaWorkflow(ctx workflow.Context) (string, error) {
 		Data: data,
 	}
 
-	err = workflow.ExecuteActivity(ctx, docusignActivities.FillTemplateFields, envelopeSummary, ndaTemplateFields, DocusignTestUser).Get(ctx, &envelopeSummary)
+	err = workflow.ExecuteActivity(ctx, activities.FillTemplateFields, envelopeSummary, ndaTemplateFields, DocusignTestUser).Get(ctx, &envelopeSummary)
 	if err != nil {
 		return "", err
 	}
 
-	err = workflow.ExecuteActivity(ctx, docusignActivities.SendDraftEnvelope, envelopeSummary, DocusignTestUser).Get(ctx, &envelopeSummary)
+	err = workflow.ExecuteActivity(ctx, activities.SendDraftEnvelope, envelopeSummary, DocusignTestUser).Get(ctx, &envelopeSummary)
 	if err != nil {
 		return "", err
 	}
@@ -62,12 +62,12 @@ func WaitForSigningWorkflow(ctx workflow.Context, envelopeID string) (string, er
 	}
 	ctx = workflow.WithActivityOptions(ctx, ao)
 
-	var docusignActivities *Activities
+	var activities *Activities
 
 	var envelopeStatus EnvelopeStatus
 
 	for {
-		err := workflow.ExecuteActivity(ctx, docusignActivities.GetEnvelopeStatus, envelopeID, DocusignTestUser).Get(ctx, &envelopeStatus)
+		err := workflow.ExecuteActivity(ctx, activities.GetEnvelopeStatus, envelopeID, DocusignTestUser).Get(ctx, &envelopeStatus)
 		if err != nil {
 			return "", err
 		}
