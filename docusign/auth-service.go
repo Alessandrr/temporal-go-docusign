@@ -162,7 +162,7 @@ func (s *AuthService) getDocusignAccessToken(jwtString string) (AccessToken, err
 		return AccessToken{}, err
 	}
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		fmt.Printf("Request failed with status code: %d, body: %s", resp.StatusCode, string(body))
 		return AccessToken{}, fmt.Errorf("request failed with status code: %d, body: %s", resp.StatusCode, string(body))

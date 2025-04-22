@@ -18,6 +18,7 @@ func main() {
 	}
 
 	cache := docusign.NewKeysCache(1 * time.Minute)
+	defer cache.Stop()
 
 	apiClient := docusign.NewAPIClient(http.Header{}, &http.Client{})
 	authService := docusign.NewAuthService(cache, apiClient, docusign.LoadConfig())
@@ -34,6 +35,7 @@ func main() {
 
 	w.RegisterActivity(activities)
 	w.RegisterWorkflow(docusign.SendNdaWorkflow)
+	w.RegisterWorkflow(docusign.WaitForSigningWorkflow)
 
 	err = w.Run(worker.InterruptCh())
 	if err != nil {

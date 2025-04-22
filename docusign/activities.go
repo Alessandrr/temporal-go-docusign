@@ -27,6 +27,7 @@ func NewActivities(apiClient *APIClient, authUpdater AuthInfoUpdater) *Activitie
 }
 
 const envelopesPath = "/restapi/v2.1/accounts/%s/envelopes/"
+const envelopePath = "/restapi/v2.1/accounts/%s/envelopes/%s"
 
 type EnvelopeStatus struct {
 	Status string `json:"status"`
@@ -165,4 +166,44 @@ func (s *Activities) SendDraftEnvelope(ctx context.Context, envelopeSummary Enve
 	}
 
 	return envelopeSummary, nil
+}
+
+func (s *Activities) GetEnvelopeStatus(ctx context.Context, envelopeID string, user DocusignUser) (EnvelopeStatus, error) {
+	authInfo, err := s.authUpdater.UpdateAuthInfo(user)
+	if err != nil {
+		return EnvelopeStatus{}, err
+	}
+
+	req, err := http.NewRequest(
+		"GET",
+		fmt.Sprintf(s.apiClient.BaseURL+envelopePath, authInfo.AccountId, envelopeID),
+		nil,
+	)
+	if err != nil {
+		return EnvelopeStatus{}, err
+	}
+
+	req.Header = s.apiClient.AuthHeader.Clone()
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := s.apiClient.Client.Do(req)
+	if err != nil {
+		return EnvelopeStatus{}, err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return EnvelopeStatus{}, fmt.Errorf("%s: failed to get envelope status: %s", resp.Status, resp.Body)
+	}
+
+	defer resp.Body.Close()
+
+	var envelopeStatus EnvelopeStatus
+	err = json.NewDecoder(resp.Body).Decode(&envelopeStatus)
+	if err != nil {
+		return EnvelopeStatus{}, err
+	}
+
+	fmt.Printf("Envelope status: %+v\n", envelopeStatus)
+
+	return envelopeStatus, nil
 }
